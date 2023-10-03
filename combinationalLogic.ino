@@ -29,10 +29,10 @@ void loop() {
   int resultado = evaluarExpresion(A, B, C, D);
 
   // Encender o apagar el LED basado en el resultado de la expresión
-  if( !resultado )
-    digitalWrite(pinLED, HIGH);
-  else
+  if( resultado == 0 )
     digitalWrite(pinLED, LOW);
+  else
+    digitalWrite(pinLED, HIGH);
 }
 
 // Función para evaluar la expresión booleana
