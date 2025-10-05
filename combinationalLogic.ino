@@ -38,5 +38,5 @@ void loop() {
 // Función para evaluar la expresión booleana
 int evaluarExpresion(int A, int B, int C, int D) {
   // Expresión booleana simplificada: A'B' + B'D' + B'C'
-  return (( A && !B ) || ( !B && !D ) || ( !B & !C ));
+  return (( A && !B ) || ( !B && !D ) || ( !B && !C ));
 }
