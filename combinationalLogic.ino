@@ -1,11 +1,12 @@
 // Definición de pines de entrada
-const int pinA = D1;    //D1
-const int pinB = D2;    //D2
-const int pinC = D5;    //D5
-const int pinD = D6;    //D6
+// DIP Switch -> D:5, C:6, B:7, A:8
+const int pinA = D6;    
+const int pinB = D5;    
+const int pinC = D2;    
+const int pinD = D1;    
 
 // Definición de pin de salida para el LED
-const int pinLED = D0;  //D0
+const int pinLED = D7;  
 
 void setup() {
   // Configuración de pines de entrada
@@ -37,6 +38,10 @@ void loop() {
 
 // Función para evaluar la expresión booleana
 int evaluarExpresion(int A, int B, int C, int D) {
-  // Expresión booleana simplificada: A'B' + B'D' + B'C'
-  return (( A && !B ) || ( !B && !D ) || ( !B && !C ));
+  // Reemplazar la expresión en minitérminos con la ecuación simplificada
+  return ((!A && !B && !C && !D) || //m0
+          (!A && !B && !C &&  D) || //m1
+          (!A && !B &&  C && !D) || //m2
+          ( A && !B && !C &&  D) || //m9
+          ( A && !B &&  C &&  D));  //m11
 }
