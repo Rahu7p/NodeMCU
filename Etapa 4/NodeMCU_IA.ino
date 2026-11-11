@@ -1,85 +1,136 @@
-#include <ESP8266WiFi.h>       // Permite conectar el NodeMCU a Wi-Fi
-#include <WiFiClientSecure.h>  // Permite establecer conexiones HTTPS
-#include <ESP8266HTTPClient.h> // Permite enviar solicitudes HTTP
-#include <ArduinoJson.h>       // Permite crear y leer datos en formato JSON
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
+#include <ESP8266HTTPClient.h>
+#include <ArduinoJson.h>
+#include <DHT.h>
 
-// Datos de la red Wi-Fi y clave
-const char* ssid = "ssid";
-const char* password = "password";
-const char* apiKey = "api key";
+// Configuracion del sensor
+#define DHTPIN D4
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+// Credenciales
+const char* ssid = "TU_WIFI";
+const char* password = "TU_PASSWORD";
+const char* apiKey = "TU_API_KEY";
+
+// Utiliza un identificador de modelo disponible en Google AI Studio
+const char* modelo = "MODELO_DISPONIBLE";
 
 void setup() {
-  Serial.begin(115200); // Inicia la comunicación con la computadora
+  Serial.begin(115200);
+  dht.begin();
 
-  // Conectarse a la red Wi-Fi
+  // Conexion Wi-Fi
   WiFi.begin(ssid, password);
+  Serial.print("Conectando a Wi-Fi...");
+
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500); // Esperar mientras se establece la conexión
+    delay(500);
+    Serial.print(".");
   }
 
-  Serial.println("Wi-Fi conectado");
+  Serial.println("\nWi-Fi conectado");
 
-  // Preparar la conexión segura con el servidor de Google
-  WiFiClientSecure client;
-  client.setInsecure(); // Desactiva la validación del certificado; solo para pruebas
+  delay(2000);
 
-  HTTPClient https;
+  // Obtener mediciones reales
+  float temperatura = dht.readTemperature();
+  float humedad = dht.readHumidity();
 
-  // Dirección de la API: incluye el modelo que generará la respuesta
-  String url = "https://generativelanguage.googleapis.com/v1beta/models/MODEL_ID:generateContent";
-
-  if (!https.begin(client, url)) {
-    Serial.println("Error al iniciar la conexión HTTPS");
+  if (isnan(temperatura) || isnan(humedad)) {
+    Serial.println("Error al leer el sensor");
     return;
   }
 
-  // Indicar que enviaremos datos JSON y proporcionar la clave API
+  Serial.println("\n=== DATOS DEL SENSOR ===");
+  Serial.print("Temperatura: ");
+  Serial.println(temperatura);
+
+  Serial.print("Humedad: ");
+  Serial.println(humedad);
+
+  // Configurar conexion HTTPS
+  WiFiClientSecure client;
+  client.setInsecure(); // Solo para pruebas
+
+  HTTPClient https;
+
+  String url =
+    "https://generativelanguage.googleapis.com/v1beta/models/";
+
+  url += modelo;
+  url += ":generateContent";
+
+  if (!https.begin(client, url)) {
+    Serial.println("Error al iniciar HTTPS");
+    return;
+  }
+
   https.addHeader("Content-Type", "application/json");
   https.addHeader("x-goog-api-key", apiKey);
 
-  // Construir la pregunta que recibirá Gemini
-  JsonDocument request;
-  request["contents"][0]["parts"][0]["text"] =
-      "Un sensor DHT11 registra una temperatura de [TEMPERATURA] °C y una humedad relativa de [HUMEDAD] %. Interpreta estas mediciones y explica qué conclusiones pueden obtenerse. Indica si las condiciones podrían representar algún riesgo para las personas, qué información adicional necesitarías y cuáles son las limitaciones de utilizar únicamente estos datos. 
-Distingue los hechos de las suposiciones y no inventes información que no pueda determinarse a partir de las mediciones.";
+  // Construir pregunta con datos del sensor
+  String pregunta = "Un sensor DHT11 registra una temperatura de ";
 
-  // Convertir el objeto JSON en texto para enviarlo al servidor
-  String body;
-  serializeJson(request, body);
+  pregunta += String(temperatura, 1);
+  pregunta += " grados Celsius y una humedad relativa de ";
+  pregunta += String(humedad, 1);
 
-  // Enviar la pregunta y recibir el código de respuesta HTTP
-  int code = https.POST(body);
-  Serial.printf("Código HTTP: %d\n", code);
+  pregunta += " por ciento. Interpreta estas mediciones, ";
+  pregunta += "explica sus limitaciones y proporciona una ";
+  pregunta += "recomendacion breve.";
 
-  if (code == 200) { // El servidor procesó la solicitud correctamente
-    String response = https.getString(); // Obtener la respuesta completa
+  // Construir solicitud JSON
+  JsonDocument solicitud;
 
-    // Interpretar la respuesta recibida en formato JSON
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, response);
+  solicitud["contents"][0]["parts"][0]["text"] = pregunta;
+
+  String cuerpo;
+  serializeJson(solicitud, cuerpo);
+
+  // Enviar solicitud
+  Serial.println("\nConsultando modelo de IA...");
+
+  int codigo = https.POST(cuerpo);
+
+  Serial.print("Codigo HTTP: ");
+  Serial.println(codigo);
+
+  if (codigo == 200) {
+
+    String respuesta = https.getString();
+
+    JsonDocument resultado;
+
+    DeserializationError error =
+      deserializeJson(resultado, respuesta);
 
     if (!error) {
-      // Localizar el texto generado dentro de la estructura JSON
-      const char* answer =
-          doc["candidates"][0]["content"]["parts"][0]["text"];
 
-      if (answer) {
-        Serial.println("Respuesta de Gemini:");
-        Serial.println(answer); // Mostrar la respuesta en el monitor serie
+      const char* texto =
+        resultado["candidates"][0]["content"]["parts"][0]["text"];
+
+      if (texto != nullptr) {
+        Serial.println("\n=== RESPUESTA DEL MODELO ===");
+        Serial.println(texto);
       } else {
-        Serial.println("No se encontró texto en la respuesta");
+        Serial.println("No se encontro una respuesta");
       }
+
     } else {
-      Serial.println("Error al interpretar el JSON");
+      Serial.println("Error al interpretar JSON");
     }
+
   } else {
-    // Si ocurre un error, mostrar el mensaje devuelto por el servidor
+    Serial.println("Error en la solicitud:");
     Serial.println(https.getString());
   }
 
-  https.end(); // Cerrar la conexión y liberar recursos
+  https.end();
 }
 
 void loop() {
-  // No se repite ninguna acción: la consulta se realiza una sola vez
+  // La consulta se realiza una sola vez
 }
